@@ -1,0 +1,3 @@
+# memcached-go
+
+memcached client
