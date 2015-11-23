@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/bradfitz/gomemcache/memcache"
-	"github.com/codegangsta/cli"
 	"net"
 	"regexp"
 	"strconv"
@@ -30,27 +28,34 @@ var (
 	response_not_found = "NOT_FOUND"
 )
 
+type Client struct {
+	conn *net.TCPConn
+}
+
 type ItemMeta struct {
 	Key    string
 	Size   int
 	Expire int
 }
 
-func Conn(c *cli.Context) (*net.TCPConn, error) {
-	tcpAddress, err := net.ResolveTCPAddr("tcp", c.GlobalString("host")+":"+strconv.Itoa(c.GlobalInt("port")))
+func Conn(host string, port int) (Client, error) {
+	addr := fmt.Sprintf("%s:%d", host, port)
+	tcpAddress, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		return nil, err
+		return Client{}, err
 	}
 
 	conn, err := net.DialTCP("tcp", nil, tcpAddress)
 	if err != nil {
-		return nil, err
+		return Client{}, err
 	}
 
-	return conn, nil
+	return Client{conn: conn}, nil
 }
 
-func Get(conn *net.TCPConn, key []byte) (string, error) {
+func (cli *Client) Get(key []byte) (string, error) {
+	conn := cli.conn
+
 	buff := bytes.NewBuffer(request_get)
 	buff.Write(key)
 	buff.WriteString("\r\n")
@@ -71,7 +76,9 @@ func Get(conn *net.TCPConn, key []byte) (string, error) {
 	return sub[1], nil
 }
 
-func Set(conn *net.TCPConn, key, value []byte) (string, error) {
+func (cli *Client) Set(key, value []byte) (string, error) {
+	conn := cli.conn
+
 	length := len(value)
 
 	buff := bytes.NewBuffer(request_set)
@@ -88,7 +95,6 @@ func Set(conn *net.TCPConn, key, value []byte) (string, error) {
 	message := buff.Bytes()
 
 	result := send(conn, message)
-	fmt.Println(result)
 	if len(result) == 0 {
 		return "", errors.New("Delete Faild. Unkown Error")
 	}
@@ -100,7 +106,9 @@ func Set(conn *net.TCPConn, key, value []byte) (string, error) {
 	return string(key), nil
 }
 
-func Delete(conn *net.TCPConn, key []byte) error {
+func (cli *Client) Delete(key []byte) error {
+	conn := cli.conn
+
 	buff := bytes.NewBuffer(request_delete)
 	buff.Write(key)
 	buff.WriteString("\r\n")
@@ -117,8 +125,14 @@ func Delete(conn *net.TCPConn, key []byte) error {
 	return nil
 }
 
-func DumpItems(conn *net.TCPConn) ([]ItemMeta, error) {
+func (cli *Client)  DumpItems() ([]ItemMeta, error) {
+	conn := cli.conn
+
 	stats := send(conn, []byte(string(request_stats_items)+"\r\n"))
+	if strings.Contains(stats[0], response_end) {
+		return nil, errors.New("Empty")
+	}
+
 	size, err := getItemSize(stats)
 	if err != nil {
 		return nil, err
@@ -191,9 +205,4 @@ func send(conn *net.TCPConn, message []byte) []string {
 	}
 
 	return lines
-}
-
-func New(c *cli.Context) *memcache.Client {
-	server := c.GlobalString("host") + ":" + strconv.Itoa(c.GlobalInt("port"))
-	return memcache.New(server)
 }

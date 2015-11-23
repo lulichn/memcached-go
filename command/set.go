@@ -13,15 +13,13 @@ func CmdSet(c *cli.Context) {
 	key := []byte(c.Args().Get(0))
 	value := []byte(c.Args().Get(1))
 
-	conn, err := memcache.Conn(c)
+	client, err := memcache.Conn(c.GlobalString("host"), c.GlobalInt("port"))
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	defer conn.Close()
-
-	if key, err := memcache.Set(conn, key, value); err != nil {
+	if key, err := client.Set(key, value); err != nil {
 		fmt.Println(err)
 	} else {
 		fmt.Println("Set Success: " + key)

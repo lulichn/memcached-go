@@ -12,15 +12,13 @@ func CmdGet(c *cli.Context) {
 	}
 	key := []byte(c.Args().Get(0))
 
-	conn, err := memcache.Conn(c)
+	client, err := memcache.Conn(c.GlobalString("host"), c.GlobalInt("port"))
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	defer conn.Close()
-
-	if key, err := memcache.Get(conn, key); err != nil {
+	if key, err := client.Get(key); err != nil {
 		fmt.Println(err)
 	} else {
 		fmt.Println("Get Success: " + key)

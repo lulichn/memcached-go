@@ -7,15 +7,13 @@ import (
 )
 
 func CmdList(c *cli.Context) {
-	conn, err := memcache.Conn(c)
+	client, err := memcache.Conn(c.GlobalString("host"), c.GlobalInt("port"))
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	defer conn.Close()
-
-	items, err := memcache.DumpItems(conn)
+	items, err := client.DumpItems()
 	if err != nil {
 		fmt.Println(err)
 		return

@@ -12,15 +12,13 @@ func CmdDelete(c *cli.Context) {
 	}
 	key := []byte(c.Args().Get(0))
 
-	conn, err := memcache.Conn(c)
+	client, err := memcache.Conn(c.GlobalString("host"), c.GlobalInt("port"))
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	defer conn.Close()
-
-	if err := memcache.Delete(conn, key); err != nil {
+	if err := client.Delete(key); err != nil {
 		fmt.Println(err)
 	} else {
 		fmt.Println("Delete Success")
