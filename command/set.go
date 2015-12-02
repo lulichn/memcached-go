@@ -19,9 +19,9 @@ func CmdSet(c *cli.Context) {
 		return
 	}
 
-	if key, err := client.Set(key, value); err != nil {
+	if err := client.Set(key, value, 0, 0); err != nil {
 		fmt.Println(err)
 	} else {
-		fmt.Println("Set Success: " + key)
+		fmt.Println("Set Success")
 	}
 }
