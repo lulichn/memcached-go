@@ -7,28 +7,20 @@ import (
 	"fmt"
 	"net"
 	"regexp"
-	"strings"
-	"time"
-)
-
-var EOL = []byte("\r\n")
-
-var (
-	request_get              = []byte("get ")
-	request_delete           = []byte("delete ")
+	"strconv"
 )
 
 var (
-	response_error     = "ERROR"
-	response_deleted   = "DELETED"
-	response_not_found = "NOT_FOUND"
-)
-
-var (
+	EOL                  = []byte("\r\n")
 	response_stored      = []byte("STORED")
 	response_stored_eol  = []byte("STORED\r\n")
 	response_end         = []byte("END")
 	response_end_eol     = []byte("END\r\n")
+
+	response_deleted     = []byte("DELETED\r\n")
+	response_not_found   = []byte("NOT_FOUND\r\n")
+
+	response_error       = []byte("ERROR\r\n")
 )
 
 type Client struct {
@@ -40,6 +32,12 @@ type ItemMeta struct {
 	Key    string
 	Size   string
 	Expire int
+}
+
+type GetItem struct {
+	Key   string
+	Flags int
+	Value []byte
 }
 
 func Conn(host string, port int) (Client, error) {
@@ -60,33 +58,54 @@ func Conn(host string, port int) (Client, error) {
 	}, nil
 }
 
-func (cli *Client) Get(key []byte) (string, error) {
-	conn := cli.conn
+func (cli *Client) Get(key string) (GetItem, error) {
+	getItem := GetItem{}
+	fmt.Println(key)
 
-	buff := bytes.NewBuffer(request_get)
-	buff.Write(key)
-	buff.WriteString("\r\n")
-	message := buff.Bytes()
-
-	result := send(conn, message)
-	fmt.Println(result)
-	if len(result) == 0 {
-		return "", errors.New("Delete Faild. Unkown Error")
+	if _, err := fmt.Fprintf(cli.rw, "get %s\r\n", key); err != nil {
+		return getItem, err
+	}
+	if err := cli.rw.Flush(); err != nil {
+		return getItem, err
 	}
 
 	r := regexp.MustCompile(`^VALUE\s+([\w\-]+)\s+(\d+)\s+(\d+)`)
-	if !r.MatchString(result[0]) {
-		return "", errors.New("Get Faild. Cache miss")
+	meta, err := cli.rw.ReadSlice('\n')
+	if err != nil {
+		return getItem, err
+	}
+	if bytes.Equal(meta, response_end_eol) {
+		return getItem, errors.New("Cache Miss")
+	}
+	metaSub := r.FindStringSubmatch(string(meta))
+	fmt.Println(metaSub)
+
+	flags, err := strconv.Atoi(metaSub[2])
+	if err != nil {
+		return getItem, err
+	}
+	size, err := strconv.Atoi(metaSub[3])
+	if err != nil {
+		return getItem, err
 	}
 
-	sub := r.FindStringSubmatch(r.FindString(result[0]))
+	buffer := make([]byte, size)
+	readSize, err := cli.rw.Read(buffer)
+	if err != nil {
+		return getItem, err
+	}
 
-	return sub[1], nil
+	getItem.Key   = metaSub[1]
+	getItem.Flags = flags
+	getItem.Value = buffer[:readSize]
+
+	fmt.Println(getItem)
+	return getItem, nil
 }
 
-func (cli *Client) Set(key, value []byte, flags uint16, expireTime int) error {
+func (cli *Client) Set(key string, value []byte, flags uint16, expireTime int) error {
 	length := len(value)
-	if _, err := fmt.Fprintf(cli.rw, "set %x %d %d %d\r\n", key, flags, expireTime, length); err != nil {
+	if _, err := fmt.Fprintf(cli.rw, "set %s %d %d %d\r\n", key, flags, expireTime, length); err != nil {
 		return err
 	}
 	if _, err := cli.rw.Write(value); err != nil {
@@ -110,62 +129,49 @@ func (cli *Client) Set(key, value []byte, flags uint16, expireTime int) error {
 	return errors.New("Set Faild")
 }
 
-func (cli *Client) Delete(key []byte) error {
-	conn := cli.conn
+func (cli *Client) Delete(key string) error {
 
-	buff := bytes.NewBuffer(request_delete)
-	buff.Write(key)
-	buff.WriteString("\r\n")
-	message := buff.Bytes()
-
-	result := send(conn, message)
-	if len(result) == 0 {
-		return errors.New("Delete Faild. Unkown Error")
+	if _, err := fmt.Fprintf(cli.rw, "delete %s\r\n", key); err != nil {
+		return err
+	}
+	if err := cli.rw.Flush(); err != nil {
+		return err
 	}
 
-	if strings.Contains(result[0], response_not_found) {
-		return errors.New("Delete Faild. Cache miss")
+	meta, err := cli.rw.ReadSlice('\n')
+	if err != nil {
+		return err
 	}
-	return nil
+	fmt.Println(string(meta))
+	if bytes.Equal(meta, response_deleted) {
+		return nil
+	}
+	if bytes.Equal(meta, response_not_found) {
+		return errors.New("Delete failed: Key Not Found. (Key: " + key + ")")
+	}
+
+	return errors.New("Delete failed: Unknown")
 }
 
-func send_b(conn *net.TCPConn, message []byte) ([]byte, error) {
-	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	conn.Write(message)
-
-	readBuff := make([]byte, 2048)  // FIXME
-	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-
-	readLength, err := conn.Read(readBuff)
-	if err != nil {
+func send_bb(cli *Client, request []byte) (*bytes.Buffer, error) {
+	if _, err := cli.rw.Write(request); err != nil {
+		return nil, err
+	}
+	if err := cli.rw.Flush(); err != nil {
 		return nil, err
 	}
 
-	return readBuff[:readLength], nil
-}
-
-func send(conn *net.TCPConn, message []byte) []string {
-	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	conn.Write(message)
-
-	readBuff := make([]byte, 1024)
-	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-
-	readLength, err := conn.Read(readBuff)
-	if err != nil {
-		panic(err)
+	buffer := bytes.NewBuffer(make([]byte, 0, 100))
+	for {
+		readBuff := make([]byte, 1024)
+		size, err := cli.rw.Read(readBuff)
+		if err != nil {
+			return nil, err
+		}
+		buffer.Write(readBuff[:size])
+		if size < 1024 {
+			break
+		}
 	}
-
-	scanner := bufio.NewScanner(bytes.NewReader(readBuff[:readLength]))
-	var lines []string
-
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-
-	if err := scanner.Err(); err != nil {
-		panic(err)
-	}
-
-	return lines
+	return buffer, nil
 }

@@ -10,7 +10,7 @@ func CmdSet(c *cli.Context) {
 	if len(c.Args()) <= 1 {
 		return
 	}
-	key := []byte(c.Args().Get(0))
+	key   := c.Args().Get(0)
 	value := []byte(c.Args().Get(1))
 
 	client, err := memcache.Conn(c.GlobalString("host"), c.GlobalInt("port"))

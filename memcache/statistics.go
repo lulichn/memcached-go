@@ -47,12 +47,12 @@ func (cli *Client) DumpItems() (map[string]ItemMeta, error) {
 
 	for bucket, number := range itemSize {
 		request := fmt.Sprintf("stats cachedump %d %d\r\n", bucket, number)
-		byteArray, err := send_b(cli.conn, []byte(request))
+		buffer, err := send_bb(cli, []byte(request))
 		if err != nil {
 			return nil, err
 		}
 
-		lines := toMap(byteArray)
+		lines := toMap(buffer.Bytes())
 
 		fmt.Println(lines)
 
@@ -74,21 +74,12 @@ func (cli *Client) DumpItems() (map[string]ItemMeta, error) {
 
 
 func stats(cli *Client, request []byte) (map[string]string, error) {
-	if _, err := cli.rw.Write(request); err != nil {
-		return nil, err
-	}
-	if err := cli.rw.Flush(); err != nil {
-		return nil, err
-	}
-
-	byteArray, err := send_b(cli.conn, request)
+	buffer, err := send_bb(cli, request)
 	if err != nil {
 		return nil, err
 	}
 
-	items := toMap(byteArray)
-
-	return items, nil
+	return toMap(buffer.Bytes()), nil
 }
 
 func toMap(message []byte) map[string]string {

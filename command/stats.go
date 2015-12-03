@@ -13,7 +13,7 @@ func CmdStats(c *cli.Context) {
 		return
 	}
 
-	items, err := client.StatsItems()
+	items, err := client.Stats()
 	if err != nil {
 		fmt.Println(err)
 		return
