@@ -21,8 +21,7 @@ func CmdList(c *cli.Context) {
 		for idx := 0; idx < len(itemsList); idx += 1 {
 			items := itemsList[idx]
 			for key, meta := range items {
-				fmt.Println(key)
-				fmt.Println(meta)
+				fmt.Sprintf("%s,%s,%d", key, meta.Size, meta.Expire)
 			}
 		}
 	} else {
@@ -38,8 +37,7 @@ func CmdList(c *cli.Context) {
 		}
 
 		for key, meta := range items {
-			fmt.Println(key)
-			fmt.Println(meta)
+			fmt.Sprintf("%s,%s,%d", key, meta.Size, meta.Size)
 		}
 	}
 }
