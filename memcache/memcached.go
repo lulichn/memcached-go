@@ -148,8 +148,7 @@ func (cli * Client) clusterConfig() ([]host, error) {
 		return nil, err
 	}
 
-	clusterInfo := string(info)
-	clusters := strings.Split(clusterInfo, " ")
+	clusters := strings.Split(strings.TrimRight(string(info), "\n"), " ")
 
 	hosts := make([]host, 0)
 	for idx := 0; idx < len(clusters); idx += 1 {
