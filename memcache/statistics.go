@@ -18,16 +18,32 @@ func (cli *Client) Stats() (map[string]string, error) {
 	return stats(cli, request_stats)
 }
 
+func (cli *ClusterClient) Stats() ([]map[string]string, error) {
+	return clusterStats(cli.nodes, request_stats)
+}
+
 func (cli *Client) StatsItems() (map[string]string, error) {
 	return stats(cli, request_stats_items)
+}
+
+func (cli *ClusterClient) StatsItems() ([]map[string]string, error) {
+	return clusterStats(cli.nodes, request_stats_items)
 }
 
 func (cli *Client) StatsSlabs() (map[string]string, error) {
 	return stats(cli, request_stats_slabs)
 }
 
+func (cli *ClusterClient) StatsSlabs() ([]map[string]string, error) {
+	return clusterStats(cli.nodes, request_stats_slabs)
+}
+
 func (cli *Client) StatsSettings() (map[string]string, error) {
 	return stats(cli, request_stats_settings)
+}
+
+func (cli *ClusterClient) StatsSettings() ([]map[string]string, error) {
+	return clusterStats(cli.nodes, request_stats_settings)
 }
 
 func (cli *Client) DumpItems() (map[string]ItemMeta, error) {
@@ -54,8 +70,6 @@ func (cli *Client) DumpItems() (map[string]ItemMeta, error) {
 
 		lines := toMap(buffer.Bytes())
 
-		fmt.Println(lines)
-
 		for key, value := range lines {
 			sub := r.FindStringSubmatch(value)
 			if len(sub) > 0 {
@@ -72,6 +86,21 @@ func (cli *Client) DumpItems() (map[string]ItemMeta, error) {
 	return items, nil
 }
 
+func (cli *ClusterClient) DumpItems() ([]map[string]ItemMeta, error) {
+	mapVal := make([]map[string]ItemMeta, 0)
+
+	for idx := 0; idx < len(cli.nodes); idx += 1 {
+		node := cli.nodes[idx]
+		if items, err := node.DumpItems(); err != nil {
+			return nil, err
+		} else {
+			mapVal = append(mapVal, items)
+		}
+	}
+
+	return mapVal, nil
+}
+
 
 func stats(cli *Client, request []byte) (map[string]string, error) {
 	buffer, err := send_bb(cli, request)
@@ -80,6 +109,21 @@ func stats(cli *Client, request []byte) (map[string]string, error) {
 	}
 
 	return toMap(buffer.Bytes()), nil
+}
+
+func clusterStats(nodes []Client, request []byte) ([]map[string]string, error) {
+	mapVal := make([]map[string]string, 0)
+
+	for idx := 0; idx < len(nodes); idx += 1 {
+		node := nodes[idx]
+		if stat, err := stats(&node, request); err != nil {
+			return nil, err
+		} else {
+			mapVal = append(mapVal, stat)
+		}
+	}
+
+	return mapVal, nil
 }
 
 func toMap(message []byte) map[string]string {
