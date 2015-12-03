@@ -1,13 +1,12 @@
 package memcache
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
-	"net"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -23,11 +22,6 @@ var (
 	response_error       = []byte("ERROR\r\n")
 )
 
-type Client struct {
-	conn *net.TCPConn
-	rw   *bufio.ReadWriter
-}
-
 type ItemMeta struct {
 	Key    string
 	Size   string
@@ -40,27 +34,8 @@ type GetItem struct {
 	Value []byte
 }
 
-func Conn(host string, port int) (Client, error) {
-	addr := fmt.Sprintf("%s:%d", host, port)
-	tcpAddress, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return Client{}, err
-	}
-
-	conn, err := net.DialTCP("tcp", nil, tcpAddress)
-	if err != nil {
-		return Client{}, err
-	}
-	bufio.NewReader(conn)
-	return Client{
-		conn: conn,
-		rw:   bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn)),
-	}, nil
-}
-
 func (cli *Client) Get(key string) (GetItem, error) {
 	getItem := GetItem{}
-	fmt.Println(key)
 
 	if _, err := fmt.Fprintf(cli.rw, "get %s\r\n", key); err != nil {
 		return getItem, err
@@ -78,7 +53,6 @@ func (cli *Client) Get(key string) (GetItem, error) {
 		return getItem, errors.New("Cache Miss")
 	}
 	metaSub := r.FindStringSubmatch(string(meta))
-	fmt.Println(metaSub)
 
 	flags, err := strconv.Atoi(metaSub[2])
 	if err != nil {
@@ -99,7 +73,6 @@ func (cli *Client) Get(key string) (GetItem, error) {
 	getItem.Flags = flags
 	getItem.Value = buffer[:readSize]
 
-	fmt.Println(getItem)
 	return getItem, nil
 }
 
@@ -142,7 +115,6 @@ func (cli *Client) Delete(key string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(string(meta))
 	if bytes.Equal(meta, response_deleted) {
 		return nil
 	}
@@ -151,6 +123,50 @@ func (cli *Client) Delete(key string) error {
 	}
 
 	return errors.New("Delete failed: Unknown")
+}
+
+func (cli * Client) clusterConfig() ([]host, error) {
+	if _, err := fmt.Fprintf(cli.rw, "config get cluster\r\n"); err != nil {
+		return nil, err
+	}
+	if err := cli.rw.Flush(); err != nil {
+		return nil, err
+	}
+
+	_, err := cli.rw.ReadSlice('\n')
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = cli.rw.ReadSlice('\n')
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := cli.rw.ReadSlice('\n')
+	if err != nil {
+		return nil, err
+	}
+
+	clusterInfo := string(info)
+	clusters := strings.Split(clusterInfo, " ")
+
+	hosts := make([]host, 0)
+	for idx := 0; idx < len(clusters); idx += 1 {
+		cluster := clusters[idx]
+		data := strings.Split(cluster, "|")
+
+		portNum, err := strconv.Atoi(data[2])
+		if err != nil {
+			return nil, err
+		}
+
+		hosts = append( hosts, host {
+			hostName: data[0],
+			port: portNum,
+		})
+	}
+	return hosts, nil
 }
 
 func send_bb(cli *Client, request []byte) (*bytes.Buffer, error) {
