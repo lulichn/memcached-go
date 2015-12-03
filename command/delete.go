@@ -10,7 +10,7 @@ func CmdDelete(c *cli.Context) {
 	if len(c.Args()) <= 0 {
 		return
 	}
-	key := []byte(c.Args().Get(0))
+	key := c.Args().Get(0)
 
 	client, err := memcache.Conn(c.GlobalString("host"), c.GlobalInt("port"))
 	if err != nil {

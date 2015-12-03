@@ -10,7 +10,7 @@ func CmdGet(c *cli.Context) {
 	if len(c.Args()) <= 0 {
 		return
 	}
-	key := []byte(c.Args().Get(0))
+	key := c.Args().Get(0)
 
 	client, err := memcache.Conn(c.GlobalString("host"), c.GlobalInt("port"))
 	if err != nil {
@@ -18,9 +18,9 @@ func CmdGet(c *cli.Context) {
 		return
 	}
 
-	if key, err := client.Get(key); err != nil {
+	if item, err := client.Get(key); err != nil {
 		fmt.Println(err)
 	} else {
-		fmt.Println("Get Success: " + key)
+		fmt.Println("Get Success: " + item.Key)
 	}
 }
