@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"strings"
 )
 
 var (
@@ -37,7 +36,7 @@ type Item struct {
 	Value []byte
 }
 
-func (cli *Clients) Get(key string) (Item, error) {
+func (cli *Client) Get(key string) (Item, error) {
 	getItem := Item{}
 
 	addr, err := cli.pickServer(key)
@@ -88,7 +87,7 @@ func (cli *Clients) Get(key string) (Item, error) {
 	return getItem, nil
 }
 
-func (cli *Clients) Set(key string, value []byte, flags uint16, expireTime int) error {
+func (cli *Client) Set(key string, value []byte, flags uint16, expireTime int) error {
 	addr, err := cli.pickServer(key)
 	if err != nil {
 		return err
@@ -123,7 +122,7 @@ func (cli *Clients) Set(key string, value []byte, flags uint16, expireTime int) 
 	return errors.New("Set Faild")
 }
 
-func (cli *Clients) Delete(key string) error {
+func (cli *Client) Delete(key string) error {
 	addr, err := cli.pickServer(key)
 	if err != nil {
 		return err
@@ -154,12 +153,9 @@ func (cli *Clients) Delete(key string) error {
 	return errors.New("Delete failed: Unknown")
 }
 
-func (cli * Clients) clusterConfig() ([]host, error) {
-	addr, err := cli.pickServer("")
-	if err != nil {
-		return nil, err
-	}
-	conn, err := cli.getConn(addr)
+func (cli * Client) ClusterConfig() ([]string, error) {
+	addrs := cli.serverSelector.Servers()
+	conn, err := cli.getConn(addrs[0])
 	if err != nil {
 		return nil, err
 	}
@@ -171,37 +167,35 @@ func (cli * Clients) clusterConfig() ([]host, error) {
 		return nil, err
 	}
 
-	_, err = conn.rw.ReadSlice('\n')
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = conn.rw.ReadSlice('\n')
-	if err != nil {
-		return nil, err
-	}
-
-	info, err := conn.rw.ReadSlice('\n')
-	if err != nil {
-		return nil, err
-	}
-
-	clusters := strings.Split(strings.TrimRight(string(info), "\n"), " ")
-
-	hosts := make([]host, 0)
-	for idx := 0; idx < len(clusters); idx += 1 {
-		cluster := clusters[idx]
-		data := strings.Split(cluster, "|")
-
-		portNum, err := strconv.Atoi(data[2])
+	versionNum := 0
+	hosts := make([]string, 0)
+	for idx := 0; ; idx += 1 {
+		data, err := conn.rw.ReadSlice('\n')
 		if err != nil {
 			return nil, err
 		}
-
-		hosts = append( hosts, host {
-			hostName: data[0],
-			port: portNum,
-		})
+		if bytes.Equal(data, response_error) {
+			return nil, errors.New("ERROR")
+		}
+		if bytes.Equal(data, response_end) {
+			break
+		}
+		switch idx {
+		case 1:
+			if num, err := strconv.Atoi(string(data)); err != nil {
+				return nil, err
+			} else {
+				versionNum = num
+			}
+		case 2:
+			nodes := bytes.Split(bytes.Trim(data, "\r\n"), []byte(" "))
+			for _, node := range nodes {
+				sub := bytes.Split(node, []byte("|"))
+				hosts = append(hosts, string(sub[0]) + ":" + string(sub[2]))
+			}
+		}
 	}
+	fmt.Println(versionNum)
+	fmt.Println(hosts)
 	return hosts, nil
 }

@@ -17,23 +17,23 @@ var (
 	request_cache_dump     = "stats cachedump %d %d\r\n"
 )
 
-func (cli *Clients) Stats() ([]map[string]string, error) {
+func (cli *Client) Stats() ([]map[string]string, error) {
 	return cli.clusterStats(request_stats)
 }
 
-func (cli *Clients) StatsItems() ([]map[string]string, error) {
+func (cli *Client) StatsItems() ([]map[string]string, error) {
 	return cli.clusterStats(request_stats_items)
 }
 
-func (cli *Clients) StatsSlabs() ([]map[string]string, error) {
+func (cli *Client) StatsSlabs() ([]map[string]string, error) {
 	return cli.clusterStats(request_stats_slabs)
 }
 
-func (cli *Clients) StatsSettings() ([]map[string]string, error) {
+func (cli *Client) StatsSettings() ([]map[string]string, error) {
 	return cli.clusterStats(request_stats_settings)
 }
 
-func (cli *Clients) dumpItems(addr net.Addr) (map[string]ItemMeta, error) {
+func (cli *Client) dumpItems(addr net.Addr) (map[string]ItemMeta, error) {
 	conn, err := cli.getConn(addr)
 	if err != nil {
 		return nil, err
@@ -91,7 +91,7 @@ func (cli *Clients) dumpItems(addr net.Addr) (map[string]ItemMeta, error) {
 	return items, nil
 }
 
-func (cli *Clients) ClusterDumpItems() ([]map[string]ItemMeta, error) {
+func (cli *Client) ClusterDumpItems() ([]map[string]ItemMeta, error) {
 	servers := cli.serverSelector.Servers()
 	mapVal := make([]map[string]ItemMeta, len(servers))
 
@@ -107,7 +107,7 @@ func (cli *Clients) ClusterDumpItems() ([]map[string]ItemMeta, error) {
 }
 
 
-func (cli *Clients) stats(addr net.Addr, request string) (map[string]string, error) {
+func (cli *Client) stats(addr net.Addr, request string) (map[string]string, error) {
 	conn, err := cli.getConn(addr)
 	if err != nil {
 		return nil, err
@@ -140,7 +140,7 @@ func (cli *Clients) stats(addr net.Addr, request string) (map[string]string, err
 	return mapVal, nil
 }
 
-func (cli *Clients) clusterStats(request string) ([]map[string]string, error) {
+func (cli *Client) clusterStats(request string) ([]map[string]string, error) {
 	servers := cli.serverSelector.Servers()
 	mapVal := make([]map[string]string, len(servers))
 

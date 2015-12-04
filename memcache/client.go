@@ -13,59 +13,59 @@ type Nodes struct {
 	addrs []net.Addr
 }
 
-type Clients struct {
+type ClientConfiguration struct {
+	Timeout       time.Duration
+	HashAlgorithm HashAlgorithm
+}
+
+type Client struct {
 	serverSelector ServerSelector
+	configuration  ClientConfiguration
 }
 
 type conn struct {
 	nc   net.Conn
 	rw   *bufio.ReadWriter
 	addr net.Addr
-	c    *Clients
-}
-
-type host struct {
-	hostName string
-	port     int
+	c    *Client
 }
 
 
-func New(servers ...string) *Clients {
+func New(servers []string) *Client {
+	return NewWithConfiguration(servers, ClientConfiguration{})
+}
+
+func NewWithConfiguration(servers []string, configuration ClientConfiguration) *Client {
 	nodes := new(Nodes)
-	nodes.SetNodes(servers...)
-	return NewFromSelector(nodes)
+	nodes.SetNodes(servers)
+	return NewFromSelector(nodes, configuration)
 }
 
-func NewFromSelector(ss ServerSelector) *Clients {
-	return &Clients{serverSelector: ss}
-}
-
-func (nodes *Nodes) SetNodes(servers ...string) error {
-	addrs := make([]net.Addr, len(servers))
-
-	for i, server := range servers {
-		if addr, err := net.ResolveTCPAddr("tcp", server); err != nil {
-			return err
-		} else {
-			addrs[i] = addr
-		}
+func NewFromSelector(ss ServerSelector, configuration ClientConfiguration) *Client {
+	return &Client{
+		serverSelector: ss,
+		configuration: configuration,
 	}
-
-	nodes.addrs = addrs
-	return nil
 }
 
-func (nodes *Nodes) Servers() []net.Addr {
-	return nodes.addrs
+func (c *Client) pickServer(key string) (net.Addr, error) {
+	//	if !legalKey(key) {
+	//		return ErrMalformedKey
+	//	}
+	addr, err := c.serverSelector.PickServer(key)
+	if err != nil {
+		return nil, err
+	}
+	return addr, nil
 }
 
-func (c *Clients) dial(addr net.Addr) (net.Conn, error) {
+func (c *Client) dial(addr net.Addr) (net.Conn, error) {
 	type connError struct {
 		cn  net.Conn
 		err error
 	}
 
-	nc, err := net.DialTimeout(addr.Network(), addr.String(), DefaultTimeout)
+	nc, err := net.DialTimeout(addr.Network(), addr.String(), c.getTimeOut())
 	if err == nil {
 		return nc, nil
 	}
@@ -77,7 +77,7 @@ func (c *Clients) dial(addr net.Addr) (net.Conn, error) {
 	return nil, err
 }
 
-func (c *Clients) getConn(addr net.Addr) (*conn, error) {
+func (c *Client) getConn(addr net.Addr) (*conn, error) {
 	nc, err := c.dial(addr)
 	if err != nil {
 		return nil, err
@@ -88,7 +88,14 @@ func (c *Clients) getConn(addr net.Addr) (*conn, error) {
 		rw:   bufio.NewReadWriter(bufio.NewReader(nc), bufio.NewWriter(nc)),
 		c:    c,
 	}
-	cn.nc.SetDeadline(time.Now().Add(DefaultTimeout))
+	cn.nc.SetDeadline(time.Now().Add(c.getTimeOut()))
 
 	return cn, nil
+}
+
+func (c *Client) getTimeOut() time.Duration {
+	if c.configuration.Timeout != 0 {
+		return c.configuration.Timeout
+	}
+	return DefaultTimeout
 }

@@ -12,7 +12,7 @@ func CmdGet(c *cli.Context) {
 	}
 	key := c.Args().Get(0)
 
-	client := memcache.New(c.GlobalStringSlice("host")...)
+	client := memcache.New(c.GlobalStringSlice("host"))
 
 	if item, err := client.Get(key); err != nil {
 		fmt.Println(err)

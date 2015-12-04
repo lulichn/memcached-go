@@ -50,6 +50,12 @@ var Commands = []cli.Command{
 		Action: command.CmdStats,
 		Flags:  []cli.Flag{},
 	},
+	{
+		Name:   "cluster",
+		Usage:  "cluster",
+		Action: command.CmdCluster,
+		Flags:  []cli.Flag{},
+	},
 }
 
 func CommandNotFound(c *cli.Context, command string) {
