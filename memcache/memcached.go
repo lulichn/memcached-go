@@ -182,7 +182,7 @@ func (cli * Client) ClusterConfig() ([]string, error) {
 		}
 		switch idx {
 		case 1:
-			if num, err := strconv.Atoi(string(data)); err != nil {
+			if num, err := strconv.Atoi(string(bytes.Trim(data, "\r\n"))); err != nil {
 				return nil, err
 			} else {
 				versionNum = num
