@@ -55,7 +55,8 @@ func (nodes *Nodes) PickServer(key string) (net.Addr, error) {
 		return nodes.addrs[0], nil
 	}
 	rv := stringHash(key) % len(nodes.addrs)
-	if rv >= 0 || rv < len(nodes.addrs) {
+	fmt.Println(rv)
+	if rv < 0 || rv >= len(nodes.addrs) {
 		return nil, fmt.Errorf("Invalid server number. Num: %d, Key: %s", rv, key)
 	}
 
@@ -89,5 +90,6 @@ func stringHash(key string) int {
 	for _, v := range values {
 		h = 31 * h + int(v)
 	}
+	fmt.Println(h)
 	return h & 0xffffffff
 }
