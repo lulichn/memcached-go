@@ -5,49 +5,41 @@ import (
 	"strconv"
 	"regexp"
 	"fmt"
+	"errors"
+	"net"
 )
 
 var (
-	request_stats          = []byte("stats\r\n")
-	request_stats_items    = []byte("stats items\r\n")
-	request_stats_slabs    = []byte("stats slabs\r\n")
-	request_stats_settings = []byte("stats settings\r\n")
+	request_stats          = "stats\r\n"
+	request_stats_items    = "stats items\r\n"
+	request_stats_slabs    = "stats slabs\r\n"
+	request_stats_settings = "stats settings\r\n"
+	request_cache_dump     = "stats cachedump %d %d\r\n"
 )
 
-func (cli *Client) Stats() (map[string]string, error) {
-	return stats(cli, request_stats)
+func (cli *Clients) Stats() ([]map[string]string, error) {
+	return cli.clusterStats(request_stats)
 }
 
-func (cli *ClusterClient) Stats() ([]map[string]string, error) {
-	return clusterStats(cli.nodes, request_stats)
+func (cli *Clients) StatsItems() ([]map[string]string, error) {
+	return cli.clusterStats(request_stats_items)
 }
 
-func (cli *Client) StatsItems() (map[string]string, error) {
-	return stats(cli, request_stats_items)
+func (cli *Clients) StatsSlabs() ([]map[string]string, error) {
+	return cli.clusterStats(request_stats_slabs)
 }
 
-func (cli *ClusterClient) StatsItems() ([]map[string]string, error) {
-	return clusterStats(cli.nodes, request_stats_items)
+func (cli *Clients) StatsSettings() ([]map[string]string, error) {
+	return cli.clusterStats(request_stats_settings)
 }
 
-func (cli *Client) StatsSlabs() (map[string]string, error) {
-	return stats(cli, request_stats_slabs)
-}
+func (cli *Clients) dumpItems(addr net.Addr) (map[string]ItemMeta, error) {
+	conn, err := cli.getConn(addr)
+	if err != nil {
+		return nil, err
+	}
 
-func (cli *ClusterClient) StatsSlabs() ([]map[string]string, error) {
-	return clusterStats(cli.nodes, request_stats_slabs)
-}
-
-func (cli *Client) StatsSettings() (map[string]string, error) {
-	return stats(cli, request_stats_settings)
-}
-
-func (cli *ClusterClient) StatsSettings() ([]map[string]string, error) {
-	return clusterStats(cli.nodes, request_stats_settings)
-}
-
-func (cli *Client) DumpItems() (map[string]ItemMeta, error) {
-	statsItems, err := cli.StatsItems()
+	statsItems, err := cli.stats(addr, request_stats_items)
 	if err != nil {
 		return nil, err
 	}
@@ -59,42 +51,55 @@ func (cli *Client) DumpItems() (map[string]ItemMeta, error) {
 	}
 
 	items := map[string]ItemMeta{}
-	r := regexp.MustCompile(`\[(\d+) b; (\w+) s\]`)
+	r := regexp.MustCompile(`ITEM ([\w\-]+) \[(\d+) b; (\w+) s\]`)
 
 	for bucket, number := range itemSize {
-		request := fmt.Sprintf("stats cachedump %d %d\r\n", bucket, number)
-		buffer, err := send_bb(cli, []byte(request))
-		if err != nil {
+		if _, err := fmt.Fprintf(conn.rw, request_cache_dump, bucket, number); err != nil {
+			return nil, err
+		}
+		if err := conn.rw.Flush(); err != nil {
 			return nil, err
 		}
 
-		lines := toMap(buffer.Bytes())
-
-		for key, value := range lines {
-			sub := r.FindStringSubmatch(value)
-			if len(sub) > 0 {
-				expire, err := strconv.Atoi(sub[2])
-				if err != nil {
-					return nil ,err
-				}
-
-				items[key] = ItemMeta{Key: key, Size: sub[1], Expire: expire}
+		for {
+			data, err := conn.rw.ReadSlice('\n')
+			if err != nil {
+				return nil, err
 			}
+			if bytes.Equal(data, response_error) {
+				return nil, errors.New("ERROR")
+			}
+			if bytes.Equal(data, response_end) {
+				break
+			}
+			subStr := r.FindStringSubmatch(string(data))
+			if len(subStr) > 0 {
+				key  := subStr[1]
+				size := subStr[2]
+				expire, err := strconv.Atoi(subStr[3])
+				if err != nil {
+					return nil, err
+				}
+				items[key] = ItemMeta{Key: key, Size: size, Expire: expire}
+			}
+
+
+			fmt.Print(string(data))
 		}
 	}
 
 	return items, nil
 }
 
-func (cli *ClusterClient) DumpItems() ([]map[string]ItemMeta, error) {
-	mapVal := make([]map[string]ItemMeta, 0)
+func (cli *Clients) ClusterDumpItems() ([]map[string]ItemMeta, error) {
+	servers := cli.serverSelector.Servers()
+	mapVal := make([]map[string]ItemMeta, len(servers))
 
-	for idx := 0; idx < len(cli.nodes); idx += 1 {
-		node := cli.nodes[idx]
-		if items, err := node.DumpItems(); err != nil {
+	for i, server := range servers {
+		if items, err := cli.dumpItems(server); err != nil {
 			return nil, err
 		} else {
-			mapVal = append(mapVal, items)
+			mapVal[i] = items
 		}
 	}
 
@@ -102,46 +107,52 @@ func (cli *ClusterClient) DumpItems() ([]map[string]ItemMeta, error) {
 }
 
 
-func stats(cli *Client, request []byte) (map[string]string, error) {
-	buffer, err := send_bb(cli, request)
+func (cli *Clients) stats(addr net.Addr, request string) (map[string]string, error) {
+	conn, err := cli.getConn(addr)
 	if err != nil {
 		return nil, err
 	}
+	
+	if _, err := fmt.Fprintf(conn.rw, request); err != nil {
+		return nil, err
+	}
+	if err := conn.rw.Flush(); err != nil {
+		return nil, err
+	}
 
-	return toMap(buffer.Bytes()), nil
-}
-
-func clusterStats(nodes []Client, request []byte) ([]map[string]string, error) {
-	mapVal := make([]map[string]string, 0)
-
-	for idx := 0; idx < len(nodes); idx += 1 {
-		node := nodes[idx]
-		if stat, err := stats(&node, request); err != nil {
+	mapVal := map[string]string{}
+	for {
+		data, err := conn.rw.ReadSlice('\n')
+		if err != nil {
 			return nil, err
-		} else {
-			mapVal = append(mapVal, stat)
 		}
+		if bytes.Equal(data, response_error) {
+			return nil, errors.New("ERROR")
+		}
+		if bytes.Equal(data, response_end) {
+			break
+		}
+
+		split := bytes.SplitN(bytes.Trim(data, "\r\n"), []byte(" "), 3)
+		mapVal[string(split[1])] = string(split[2])
 	}
 
 	return mapVal, nil
 }
 
-func toMap(message []byte) map[string]string {
-	mapVal := map[string]string{}
+func (cli *Clients) clusterStats(request string) ([]map[string]string, error) {
+	servers := cli.serverSelector.Servers()
+	mapVal := make([]map[string]string, len(servers))
 
-	subSlice := bytes.Split(message, EOL)
-	for idx := 0; idx < len(subSlice); idx += 1 {
-		line := subSlice[idx]
-
-		if bytes.Equal(line, response_end) {
-			break
+	for i, server := range servers {
+		if stat, err := cli.stats(server, request); err != nil {
+			return nil, err
+		} else {
+			mapVal[i] = stat
 		}
-
-		split := bytes.SplitN(line, []byte(" "), 3)
-		mapVal[string(split[1])] = string(split[2])
 	}
 
-	return mapVal
+	return mapVal, nil
 }
 
 func getItemSize(items map[string]string) (map[int]int, error) {

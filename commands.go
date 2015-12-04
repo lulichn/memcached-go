@@ -8,15 +8,10 @@ import (
 )
 
 var GlobalFlags = []cli.Flag{
-	cli.StringFlag {
+	cli.StringSliceFlag {
 		Name:  "host",
-		Value: "localhost",
-		Usage: "HostName",
-	},
-	cli.IntFlag {
-		Name:  "port",
-		Value: 11211,
-		Usage: "Port",
+		//Value: []string{"localhost:11211"},
+		Usage: "HostName:Port",
 	},
 	cli.BoolFlag {
 		Name:  "es",

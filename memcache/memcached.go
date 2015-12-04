@@ -10,16 +10,18 @@ import (
 )
 
 var (
-	EOL                  = []byte("\r\n")
-	response_stored      = []byte("STORED")
-	response_stored_eol  = []byte("STORED\r\n")
-	response_end         = []byte("END")
-	response_end_eol     = []byte("END\r\n")
+	request_get    = "get %s\r\n"
+	request_set    = "set %s %d %d %d\r\n"
+	request_delete = "delete %s\r\n"
+	request_config = "config get cluster\r\n"
+)
 
-	response_deleted     = []byte("DELETED\r\n")
-	response_not_found   = []byte("NOT_FOUND\r\n")
-
-	response_error       = []byte("ERROR\r\n")
+var (
+	response_stored    = []byte("STORED\r\n")
+	response_end       = []byte("END\r\n")
+	response_deleted   = []byte("DELETED\r\n")
+	response_not_found = []byte("NOT_FOUND\r\n")
+	response_error     = []byte("ERROR\r\n")
 )
 
 type ItemMeta struct {
@@ -28,28 +30,38 @@ type ItemMeta struct {
 	Expire int
 }
 
-type GetItem struct {
+type Item struct {
 	Key   string
 	Flags int
+	Expire int
 	Value []byte
 }
 
-func (cli *Client) Get(key string) (GetItem, error) {
-	getItem := GetItem{}
+func (cli *Clients) Get(key string) (Item, error) {
+	getItem := Item{}
 
-	if _, err := fmt.Fprintf(cli.rw, "get %s\r\n", key); err != nil {
+	addr, err := cli.pickServer(key)
+	if err != nil {
 		return getItem, err
 	}
-	if err := cli.rw.Flush(); err != nil {
+	conn, err := cli.getConn(addr)
+	if err != nil {
+		return getItem, err
+	}
+
+	if _, err := fmt.Fprintf(conn.rw, request_get, key); err != nil {
+		return getItem, err
+	}
+	if err := conn.rw.Flush(); err != nil {
 		return getItem, err
 	}
 
 	r := regexp.MustCompile(`^VALUE\s+([\w\-]+)\s+(\d+)\s+(\d+)`)
-	meta, err := cli.rw.ReadSlice('\n')
+	meta, err := conn.rw.ReadSlice('\n')
 	if err != nil {
 		return getItem, err
 	}
-	if bytes.Equal(meta, response_end_eol) {
+	if bytes.Equal(meta, response_end) {
 		return getItem, errors.New("Cache Miss")
 	}
 	metaSub := r.FindStringSubmatch(string(meta))
@@ -64,7 +76,7 @@ func (cli *Client) Get(key string) (GetItem, error) {
 	}
 
 	buffer := make([]byte, size)
-	readSize, err := cli.rw.Read(buffer)
+	readSize, err := conn.rw.Read(buffer)
 	if err != nil {
 		return getItem, err
 	}
@@ -76,42 +88,59 @@ func (cli *Client) Get(key string) (GetItem, error) {
 	return getItem, nil
 }
 
-func (cli *Client) Set(key string, value []byte, flags uint16, expireTime int) error {
-	length := len(value)
-	if _, err := fmt.Fprintf(cli.rw, "set %s %d %d %d\r\n", key, flags, expireTime, length); err != nil {
+func (cli *Clients) Set(key string, value []byte, flags uint16, expireTime int) error {
+	addr, err := cli.pickServer(key)
+	if err != nil {
 		return err
 	}
-	if _, err := cli.rw.Write(value); err != nil {
-		return err
-	}
-	if _, err := cli.rw.Write([]byte("\r\n")); err != nil {
-		return err
-	}
-	if err := cli.rw.Flush(); err != nil {
-		return err
-	}
-
-	result, err := cli.rw.ReadSlice('\n')
+	conn, err := cli.getConn(addr)
 	if err != nil {
 		return err
 	}
 
-	if bytes.Equal(result, response_stored_eol) {
+	length := len(value)
+	if _, err := fmt.Fprintf(conn.rw, request_set, key, flags, expireTime, length); err != nil {
+		return err
+	}
+	if _, err := conn.rw.Write(value); err != nil {
+		return err
+	}
+	if _, err := conn.rw.Write([]byte("\r\n")); err != nil {
+		return err
+	}
+	if err := conn.rw.Flush(); err != nil {
+		return err
+	}
+
+	result, err := conn.rw.ReadSlice('\n')
+	if err != nil {
+		return err
+	}
+
+	if bytes.Equal(result, response_stored) {
 		return nil
 	}
 	return errors.New("Set Faild")
 }
 
-func (cli *Client) Delete(key string) error {
-
-	if _, err := fmt.Fprintf(cli.rw, "delete %s\r\n", key); err != nil {
+func (cli *Clients) Delete(key string) error {
+	addr, err := cli.pickServer(key)
+	if err != nil {
 		return err
 	}
-	if err := cli.rw.Flush(); err != nil {
+	conn, err := cli.getConn(addr)
+	if err != nil {
 		return err
 	}
 
-	meta, err := cli.rw.ReadSlice('\n')
+	if _, err := fmt.Fprintf(conn.rw, request_delete, key); err != nil {
+		return err
+	}
+	if err := conn.rw.Flush(); err != nil {
+		return err
+	}
+
+	meta, err := conn.rw.ReadSlice('\n')
 	if err != nil {
 		return err
 	}
@@ -125,25 +154,34 @@ func (cli *Client) Delete(key string) error {
 	return errors.New("Delete failed: Unknown")
 }
 
-func (cli * Client) clusterConfig() ([]host, error) {
-	if _, err := fmt.Fprintf(cli.rw, "config get cluster\r\n"); err != nil {
+func (cli * Clients) clusterConfig() ([]host, error) {
+	addr, err := cli.pickServer("")
+	if err != nil {
 		return nil, err
 	}
-	if err := cli.rw.Flush(); err != nil {
-		return nil, err
-	}
-
-	_, err := cli.rw.ReadSlice('\n')
+	conn, err := cli.getConn(addr)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = cli.rw.ReadSlice('\n')
+	if _, err := fmt.Fprintf(conn.rw, request_config); err != nil {
+		return nil, err
+	}
+	if err := conn.rw.Flush(); err != nil {
+		return nil, err
+	}
+
+	_, err = conn.rw.ReadSlice('\n')
 	if err != nil {
 		return nil, err
 	}
 
-	info, err := cli.rw.ReadSlice('\n')
+	_, err = conn.rw.ReadSlice('\n')
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := conn.rw.ReadSlice('\n')
 	if err != nil {
 		return nil, err
 	}
@@ -166,27 +204,4 @@ func (cli * Client) clusterConfig() ([]host, error) {
 		})
 	}
 	return hosts, nil
-}
-
-func send_bb(cli *Client, request []byte) (*bytes.Buffer, error) {
-	if _, err := cli.rw.Write(request); err != nil {
-		return nil, err
-	}
-	if err := cli.rw.Flush(); err != nil {
-		return nil, err
-	}
-
-	buffer := bytes.NewBuffer(make([]byte, 0, 100))
-	for {
-		readBuff := make([]byte, 1024)
-		size, err := cli.rw.Read(readBuff)
-		if err != nil {
-			return nil, err
-		}
-		buffer.Write(readBuff[:size])
-		if size < 1024 {
-			break
-		}
-	}
-	return buffer, nil
 }
