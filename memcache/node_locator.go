@@ -4,6 +4,7 @@ import (
 	"net"
 	"sync"
 	"fmt"
+	"errors"
 )
 
 
@@ -16,7 +17,7 @@ type ServerSelector interface {
 	// PickServer returns the server address that a given item
 	// should be shared onto.
 	Servers() []net.Addr
-	PickServer(key string) (net.Addr, error)
+	PickServer(key string, algorithm HashAlgorithm) (net.Addr, error)
 	Each(func(net.Addr) error) error
 }
 
@@ -36,6 +37,9 @@ func (nodes *Nodes) SetNodes(servers []string) error {
 }
 
 func (nodes *Nodes) Servers() []net.Addr {
+	nodes.lock.RLock()
+	defer nodes.lock.RUnlock()
+
 	return nodes.addrs
 }
 
@@ -50,17 +54,24 @@ func (nodes *Nodes) Servers() []net.Addr {
 //}
 
 
-func (nodes *Nodes) PickServer(key string) (net.Addr, error) {
-	//	nodes.mu.RLock()
-	//	defer nodes.mu.RUnlock()
-	//	if len(nodes.addrs) == 0 {
-	//		return nil, ErrNoServers
-	//	}
+func (nodes *Nodes) PickServer(key string, algorithm HashAlgorithm) (net.Addr, error) {
+	nodes.lock.RLock()
+	defer nodes.lock.RUnlock()
+
+	if len(nodes.addrs) == 0 {
+		return nil, errors.New("No Server")
+	}
+
 	if len(nodes.addrs) == 1 {
 		return nodes.addrs[0], nil
 	}
-	rv := string_hash(key) % len(nodes.addrs)
-	fmt.Println(rv)
+
+	h, err := hash(key, algorithm)
+	if err != nil {
+		return nil, err
+	}
+	rv := h % len(nodes.addrs)
+
 	if rv < 0 || rv >= len(nodes.addrs) {
 		return nil, fmt.Errorf("Invalid server number. Num: %d, Key: %s", rv, key)
 	}

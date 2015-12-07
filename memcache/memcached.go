@@ -23,17 +23,16 @@ var (
 	response_error     = []byte("ERROR\r\n")
 )
 
-type ItemMeta struct {
+type Item struct {
 	Key    string
-	Size   string
+	Flags  int
 	Expire int
+	Value  []byte
 }
 
-type Item struct {
-	Key   string
-	Flags int
-	Expire int
-	Value []byte
+type ECClusterConfig struct {
+	Version int
+	Hosts   []string
 }
 
 func (cli *Client) Get(key string) (Item, error) {
@@ -153,18 +152,20 @@ func (cli *Client) Delete(key string) error {
 	return errors.New("Delete failed: Unknown")
 }
 
-func (cli * Client) ClusterConfig() ([]string, error) {
+func (cli * Client) ClusterConfig() (ECClusterConfig, error) {
+	config := ECClusterConfig{}
+
 	addrs := cli.serverSelector.Servers()
 	conn, err := cli.getConn(addrs[0])
 	if err != nil {
-		return nil, err
+		return config, err
 	}
 
 	if _, err := fmt.Fprintf(conn.rw, request_config); err != nil {
-		return nil, err
+		return config, err
 	}
 	if err := conn.rw.Flush(); err != nil {
-		return nil, err
+		return config, err
 	}
 
 	versionNum := 0
@@ -172,10 +173,10 @@ func (cli * Client) ClusterConfig() ([]string, error) {
 	for idx := 0; ; idx += 1 {
 		data, err := conn.rw.ReadSlice('\n')
 		if err != nil {
-			return nil, err
+			return config, err
 		}
 		if bytes.Equal(data, response_error) {
-			return nil, errors.New("ERROR")
+			return config, errors.New("ERROR")
 		}
 		if bytes.Equal(data, response_end) {
 			break
@@ -183,7 +184,7 @@ func (cli * Client) ClusterConfig() ([]string, error) {
 		switch idx {
 		case 1:
 			if num, err := strconv.Atoi(string(bytes.Trim(data, "\r\n"))); err != nil {
-				return nil, err
+				return config, err
 			} else {
 				versionNum = num
 			}
@@ -195,7 +196,9 @@ func (cli * Client) ClusterConfig() ([]string, error) {
 			}
 		}
 	}
-	fmt.Println(versionNum)
-	fmt.Println(hosts)
-	return hosts, nil
+
+	config.Version = versionNum
+	config.Hosts = hosts
+
+	return config, nil
 }

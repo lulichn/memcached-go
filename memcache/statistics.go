@@ -17,6 +17,12 @@ var (
 	request_cache_dump     = "stats cachedump %d %d\r\n"
 )
 
+type ItemMeta struct {
+	Key    string
+	Size   string
+	Expire int
+}
+
 func (cli *Client) Stats() ([]map[string]string, error) {
 	return cli.clusterStats(request_stats)
 }

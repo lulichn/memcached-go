@@ -5,12 +5,14 @@ import (
 	"bufio"
 	"errors"
 	"time"
+	"sync"
 )
 
 const DefaultTimeout = 100 * time.Millisecond
 
 type Nodes struct {
 	addrs []net.Addr
+	lock  sync.RWMutex
 }
 
 type ClientConfiguration struct {
@@ -49,10 +51,7 @@ func NewFromSelector(ss ServerSelector, configuration ClientConfiguration) *Clie
 }
 
 func (c *Client) pickServer(key string) (net.Addr, error) {
-	//	if !legalKey(key) {
-	//		return ErrMalformedKey
-	//	}
-	addr, err := c.serverSelector.PickServer(key)
+	addr, err := c.serverSelector.PickServer(key, c.getHashAlgorithm())
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +70,7 @@ func (c *Client) dial(addr net.Addr) (net.Conn, error) {
 	}
 
 	if ne, ok := err.(net.Error); ok && ne.Timeout() {
-		return nil, errors.New("Timeout Error") //&ConnectTimeoutError{addr}
+		return nil, errors.New("Timeout Error")
 	}
 
 	return nil, err
@@ -98,4 +97,8 @@ func (c *Client) getTimeOut() time.Duration {
 		return c.configuration.Timeout
 	}
 	return DefaultTimeout
+}
+
+func (c *Client) getHashAlgorithm() HashAlgorithm {
+	return c.configuration.HashAlgorithm
 }

@@ -9,11 +9,11 @@ import (
 func CmdCluster(c *cli.Context) {
 	client := memcache.New(c.GlobalStringSlice("host"))
 
-	if nodes, err := client.ClusterConfig(); err != nil {
+	if config, err := client.ClusterConfig(); err != nil {
 		fmt.Println(err)
 	} else {
 		fmt.Println("Get Cluster list success.")
-		for _, node := range nodes {
+		for _, node := range config.Hosts {
 			fmt.Println(node)
 		}
 	}
