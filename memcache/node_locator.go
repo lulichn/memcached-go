@@ -168,7 +168,7 @@ func (conn *conn) clusterConfig() (ECClusterConfig, error) {
 			return config, err
 		}
 		if bytes.Equal(data, response_error) {
-			return config, error_response_error
+			return config, error_cluster_config_response_error
 		}
 		if bytes.Equal(data, response_end) {
 			break

@@ -14,15 +14,15 @@ func CmdList(c *cli.Context) {
 		client = memcache.New(c.GlobalStringSlice("host"))
 	}
 
-	itemsList, err := client.ClusterDumpItems() //DumpItems()
-	if err != nil {
+	if itemsList, err := client.ClusterDumpItems(); err != nil {
 		fmt.Println(err)
 		return
-	}
-	for idx := 0; idx < len(itemsList); idx += 1 {
-		items := itemsList[idx]
-		for key, meta := range items {
-			fmt.Printf("%s,%s,%d\n", key, meta.Size, meta.Expire)
+	} else {
+		for idx := 0; idx < len(itemsList); idx += 1 {
+			items := itemsList[idx]
+			for key, meta := range items {
+				fmt.Printf("%s,%s,%d\n", key, meta.Size, meta.Expire)
+			}
 		}
 	}
 }

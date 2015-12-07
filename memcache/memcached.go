@@ -38,6 +38,8 @@ var (
 	error_delete_key_not_found = errors.New("Delete: Key not found")
 
 	error_response_error       = errors.New("Response error")
+
+	error_cluster_config_response_error = errors.New("Cluster Config: Response error")
 )
 
 type Item struct {
@@ -71,7 +73,7 @@ func (cli *Client) Get(key string) (Item, error) {
 		return getItem, error_get_cache_miss
 	}
 	metaSub := r.FindStringSubmatch(string(meta))
-	fmt.Println(meta)
+	fmt.Println("GET: " + string(meta))
 
 	flags, err := strconv.Atoi(metaSub[2])
 	if err != nil {
@@ -124,7 +126,7 @@ func (cli *Client) Set(key string, value []byte, flags uint16, expireTime int) e
 		return nil
 	}
 
-	fmt.Println(string(result))
+	fmt.Println("SET: " + string(result))
 	return error_set_failed
 }
 
