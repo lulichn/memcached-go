@@ -54,6 +54,7 @@ func (cli *Client) Get(key string) (Item, error) {
 		return getItem, errors.New("Cache Miss")
 	}
 	metaSub := r.FindStringSubmatch(string(meta))
+	fmt.Println(meta)
 
 	flags, err := strconv.Atoi(metaSub[2])
 	if err != nil {
@@ -105,6 +106,8 @@ func (cli *Client) Set(key string, value []byte, flags uint16, expireTime int) e
 	if bytes.Equal(result, response_stored) {
 		return nil
 	}
+
+	fmt.Println(string(result))
 	return errors.New("Set Faild")
 }
 
