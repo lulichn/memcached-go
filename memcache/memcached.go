@@ -9,10 +9,10 @@ import (
 )
 
 var (
-	request_get    = "GET %s\r\n"
-	request_set    = "SET %s %d %d %d\r\n"
-	request_delete = "DELETE %s\r\n"
-	request_config = "CONFIG GET CLUSTER\r\n"
+	request_get    = "get %s\r\n"
+	request_set    = "set %s %d %d %d\r\n"
+	request_delete = "delete %s\r\n"
+	request_config = "config get cluster\r\n"
 )
 
 var (
