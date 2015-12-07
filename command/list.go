@@ -7,7 +7,12 @@ import (
 )
 
 func CmdList(c *cli.Context) {
-	client := memcache.New(c.GlobalStringSlice("host"))
+	client := &memcache.Client{}
+	if c.GlobalBool("ec") {
+		client = memcache.NewCluster(c.GlobalStringSlice("host")[0])
+	} else {
+		client = memcache.New(c.GlobalStringSlice("host"))
+	}
 
 	itemsList, err := client.ClusterDumpItems() //DumpItems()
 	if err != nil {

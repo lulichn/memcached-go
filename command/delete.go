@@ -12,7 +12,12 @@ func CmdDelete(c *cli.Context) {
 	}
 	key := c.Args().Get(0)
 
-	client := memcache.New(c.GlobalStringSlice("host"))
+	client := &memcache.Client{}
+	if c.GlobalBool("ec") {
+		client = memcache.NewCluster(c.GlobalStringSlice("host")[0])
+	} else {
+		client = memcache.New(c.GlobalStringSlice("host"))
+	}
 
 	if err := client.Delete(key); err != nil {
 		fmt.Println(err)

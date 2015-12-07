@@ -14,7 +14,7 @@ var GlobalFlags = []cli.Flag{
 		Usage: "HostName:Port",
 	},
 	cli.BoolFlag {
-		Name:  "es",
+		Name:  "ec",
 		Usage: "ElastiCache",
 	},
 }
@@ -48,12 +48,6 @@ var Commands = []cli.Command{
 		Name:   "stats",
 		Usage:  "Stats",
 		Action: command.CmdStats,
-		Flags:  []cli.Flag{},
-	},
-	{
-		Name:   "cluster",
-		Usage:  "cluster",
-		Action: command.CmdCluster,
 		Flags:  []cli.Flag{},
 	},
 }

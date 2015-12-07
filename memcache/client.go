@@ -15,9 +15,9 @@ type Nodes struct {
 	lock  sync.RWMutex
 }
 
-type ClientConfiguration struct {
-	Timeout       time.Duration
-	HashAlgorithm HashAlgorithm
+type ClusterNodes struct {
+	*Nodes
+	cnf  net.Addr
 }
 
 type Client struct {
@@ -25,13 +25,16 @@ type Client struct {
 	configuration  ClientConfiguration
 }
 
+type ClientConfiguration struct {
+	Timeout       time.Duration
+	HashAlgorithm HashAlgorithm
+}
+
 type conn struct {
 	nc   net.Conn
 	rw   *bufio.ReadWriter
 	addr net.Addr
-	c    *Client
 }
-
 
 func New(servers []string) *Client {
 	return NewWithConfiguration(servers, ClientConfiguration{})
@@ -43,6 +46,16 @@ func NewWithConfiguration(servers []string, configuration ClientConfiguration) *
 	return NewFromSelector(nodes, configuration)
 }
 
+func NewCluster(cfg string) *Client {
+	return NewClusterWithConfiguration(cfg, ClientConfiguration{})
+}
+
+func NewClusterWithConfiguration(cfg string, configuration ClientConfiguration) *Client {
+	nodes := new(ClusterNodes)
+	nodes.SetConfigurationNode(cfg)
+	return NewFromSelector(nodes, configuration)
+}
+
 func NewFromSelector(ss ServerSelector, configuration ClientConfiguration) *Client {
 	return &Client {
 		serverSelector: ss,
@@ -51,43 +64,28 @@ func NewFromSelector(ss ServerSelector, configuration ClientConfiguration) *Clie
 }
 
 func (c *Client) pickServer(key string) (net.Addr, error) {
-	addr, err := c.serverSelector.PickServer(key, c.getHashAlgorithm())
+	addr, err := c.serverSelector.PickServer(key, c.configuration.HashAlgorithm)
 	if err != nil {
 		return nil, err
 	}
 	return addr, nil
 }
 
-func (c *Client) dial(addr net.Addr) (net.Conn, error) {
-	type connError struct {
-		cn  net.Conn
-		err error
-	}
-
-	nc, err := net.DialTimeout(addr.Network(), addr.String(), c.getTimeOut())
-	if err == nil {
-		return nc, nil
-	}
-
-	if ne, ok := err.(net.Error); ok && ne.Timeout() {
-		return nil, errors.New("Timeout Error")
-	}
-
-	return nil, err
+func (c *Client) getConn(addr net.Addr) (*conn, error) {
+	return getConn(addr, c.configuration.getTimeOut())
 }
 
-func (c *Client) getConn(addr net.Addr) (*conn, error) {
-	nc, err := c.dial(addr)
+func getConn(addr net.Addr, timeout time.Duration) (*conn, error) {
+	nc, err := dial(addr, timeout)
 	if err != nil {
 		return nil, err
 	}
-	cn := &conn{
+	cn := &conn {
 		nc:   nc,
 		addr: addr,
 		rw:   bufio.NewReadWriter(bufio.NewReader(nc), bufio.NewWriter(nc)),
-		c:    c,
 	}
-	cn.nc.SetDeadline(time.Now().Add(c.getTimeOut()))
+	cn.nc.SetDeadline(time.Now().Add(timeout))
 
 	return cn, nil
 }
@@ -107,7 +105,11 @@ func (c *Client) getConnWithKey(key string) (*conn, error) {
 }
 
 func (c *Client) getConnConfigNode() (*conn, error) {
-	nodes := c.serverSelector.Servers()
+	nodes, err := c.serverSelector.Servers()
+	if err != nil {
+		return nil, err
+	}
+
 	if len(nodes) == 0 {
 		return nil, errors.New("No Server")
 	}
@@ -120,13 +122,27 @@ func (c *Client) getConnConfigNode() (*conn, error) {
 	return conn, nil
 }
 
-func (c *Client) getTimeOut() time.Duration {
-	if c.configuration.Timeout != 0 {
-		return c.configuration.Timeout
+func dial(addr net.Addr, timeout time.Duration) (net.Conn, error) {
+	type connError struct {
+		cn  net.Conn
+		err error
 	}
-	return DefaultTimeout
+
+	nc, err := net.DialTimeout(addr.Network(), addr.String(), timeout)
+	if err == nil {
+		return nc, nil
+	}
+
+	if ne, ok := err.(net.Error); ok && ne.Timeout() {
+		return nil, errors.New("Timeout Error")
+	}
+
+	return nil, err
 }
 
-func (c *Client) getHashAlgorithm() HashAlgorithm {
-	return c.configuration.HashAlgorithm
+func (c *ClientConfiguration) getTimeOut() time.Duration {
+	if c.Timeout != 0 {
+		return c.Timeout
+	}
+	return DefaultTimeout
 }

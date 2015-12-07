@@ -98,7 +98,11 @@ func (cli *Client) dumpItems(addr net.Addr) (map[string]ItemMeta, error) {
 }
 
 func (cli *Client) ClusterDumpItems() ([]map[string]ItemMeta, error) {
-	servers := cli.serverSelector.Servers()
+	servers, err := cli.serverSelector.Servers()
+	if err != nil {
+		return nil, err
+	}
+
 	mapVal := make([]map[string]ItemMeta, len(servers))
 
 	for i, server := range servers {
@@ -147,7 +151,11 @@ func (cli *Client) stats(addr net.Addr, request string) (map[string]string, erro
 }
 
 func (cli *Client) clusterStats(request string) ([]map[string]string, error) {
-	servers := cli.serverSelector.Servers()
+	servers, err := cli.serverSelector.Servers()
+	if err != nil {
+		return nil, err
+	}
+
 	mapVal := make([]map[string]string, len(servers))
 
 	for i, server := range servers {

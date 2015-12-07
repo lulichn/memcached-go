@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"github.com/codegangsta/cli"
 	"github.com/lulichn/memcached-go/memcache"
-	"time"
 )
 
 func CmdStats(c *cli.Context) {
-	config := memcache.ClientConfiguration {
-		Timeout: 100 * time.Millisecond,
-		HashAlgorithm: memcache.NATIVE_HASH,
+	client := &memcache.Client{}
+	if c.GlobalBool("ec") {
+		client = memcache.NewCluster(c.GlobalStringSlice("host")[0])
+	} else {
+		client = memcache.New(c.GlobalStringSlice("host"))
 	}
-	client := memcache.NewWithConfiguration(c.GlobalStringSlice("host"), config)
 
 	statsList, err := client.Stats()
 	if err != nil {

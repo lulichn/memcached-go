@@ -9,10 +9,10 @@ import (
 )
 
 var (
-	request_get    = "get %s\r\n"
-	request_set    = "set %s %d %d %d\r\n"
-	request_delete = "delete %s\r\n"
-	request_config = "config get cluster\r\n"
+	request_get    = "GET %s\r\n"
+	request_set    = "SET %s %d %d %d\r\n"
+	request_delete = "DELETE %s\r\n"
+	request_config = "CONFIG GET CLUSTER\r\n"
 )
 
 var (
@@ -28,11 +28,6 @@ type Item struct {
 	Flags  int
 	Expire int
 	Value  []byte
-}
-
-type ECClusterConfig struct {
-	Version int
-	Hosts   []string
 }
 
 func (cli *Client) Get(key string) (Item, error) {
@@ -138,54 +133,4 @@ func (cli *Client) Delete(key string) error {
 	}
 
 	return errors.New("Delete failed: Unknown")
-}
-
-func (cli * Client) ClusterConfig() (ECClusterConfig, error) {
-	config := ECClusterConfig{}
-
-	conn, err := cli.getConnConfigNode()
-	if err != nil {
-		return config, err
-	}
-
-	if _, err := fmt.Fprintf(conn.rw, request_config); err != nil {
-		return config, err
-	}
-	if err := conn.rw.Flush(); err != nil {
-		return config, err
-	}
-
-	versionNum := 0
-	hosts := make([]string, 0)
-	for idx := 0; ; idx += 1 {
-		data, err := conn.rw.ReadSlice('\n')
-		if err != nil {
-			return config, err
-		}
-		if bytes.Equal(data, response_error) {
-			return config, errors.New("ERROR")
-		}
-		if bytes.Equal(data, response_end) {
-			break
-		}
-		switch idx {
-		case 1:
-			if num, err := strconv.Atoi(string(bytes.Trim(data, "\r\n"))); err != nil {
-				return config, err
-			} else {
-				versionNum = num
-			}
-		case 2:
-			nodes := bytes.Split(bytes.Trim(data, "\r\n"), []byte(" "))
-			for _, node := range nodes {
-				sub := bytes.Split(node, []byte("|"))
-				hosts = append(hosts, string(sub[0]) + ":" + string(sub[2]))
-			}
-		}
-	}
-
-	config.Version = versionNum
-	config.Hosts = hosts
-
-	return config, nil
 }
