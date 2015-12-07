@@ -3,7 +3,6 @@ package memcache
 import (
 	"net"
 	"fmt"
-	"errors"
 	"bytes"
 	"strconv"
 )
@@ -48,7 +47,7 @@ func (nodes *Nodes) PickServer(key string, algorithm HashAlgorithm) (net.Addr, e
 	defer nodes.lock.RUnlock()
 
 	if len(nodes.addrs) == 0 {
-		return nil, errors.New("No Server")
+		return nil, error_no_available_server
 	}
 
 	if len(nodes.addrs) == 1 {
@@ -131,7 +130,7 @@ func (nodes *ClusterNodes) PickServer(key string, algorithm HashAlgorithm) (net.
 	defer nodes.lock.RUnlock()
 
 	if len(nodes.addrs) == 0 {
-		return nil, errors.New("No Server")
+		return nil, error_no_available_server
 	}
 
 	if len(nodes.addrs) == 1 {
@@ -169,7 +168,7 @@ func (conn *conn) clusterConfig() (ECClusterConfig, error) {
 			return config, err
 		}
 		if bytes.Equal(data, response_error) {
-			return config, errors.New("ERROR")
+			return config, error_response_error
 		}
 		if bytes.Equal(data, response_end) {
 			break

@@ -23,6 +23,23 @@ var (
 	response_error     = []byte("ERROR\r\n")
 )
 
+var (
+	error_time_out             = errors.New("TimeOot")
+
+	error_no_available_server  = errors.New("Not exist available server")
+
+	error_not_select_algorithm = errors.New("Not selected Hash Algorithm")
+
+	error_get_cache_miss       = errors.New("Get: cache miss")
+
+	error_set_failed           = errors.New("Set: Failed")
+
+	error_delete_failed        = errors.New("Delete: Failed")
+	error_delete_key_not_found = errors.New("Delete: Key not found")
+
+	error_response_error       = errors.New("Response error")
+)
+
 type Item struct {
 	Key    string
 	Flags  int
@@ -51,7 +68,7 @@ func (cli *Client) Get(key string) (Item, error) {
 		return getItem, err
 	}
 	if bytes.Equal(meta, response_end) {
-		return getItem, errors.New("Cache Miss")
+		return getItem, error_get_cache_miss
 	}
 	metaSub := r.FindStringSubmatch(string(meta))
 	fmt.Println(meta)
@@ -108,7 +125,7 @@ func (cli *Client) Set(key string, value []byte, flags uint16, expireTime int) e
 	}
 
 	fmt.Println(string(result))
-	return errors.New("Set Faild")
+	return error_set_failed
 }
 
 func (cli *Client) Delete(key string) error {
@@ -132,8 +149,8 @@ func (cli *Client) Delete(key string) error {
 		return nil
 	}
 	if bytes.Equal(meta, response_not_found) {
-		return errors.New("Delete failed: Key Not Found. (Key: " + key + ")")
+		return error_delete_key_not_found
 	}
 
-	return errors.New("Delete failed: Unknown")
+	return error_delete_failed
 }

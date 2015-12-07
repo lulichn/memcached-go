@@ -3,7 +3,6 @@ package memcache
 import (
 	"net"
 	"bufio"
-	"errors"
 	"time"
 	"sync"
 )
@@ -112,7 +111,7 @@ func (c *Client) getConnConfigNode() (*conn, error) {
 	}
 
 	if len(nodes) == 0 {
-		return nil, errors.New("No Server")
+		return nil, error_no_available_server
 	}
 
 	conn, err := c.getConn(nodes[0])
@@ -135,7 +134,7 @@ func dial(addr net.Addr, timeout time.Duration) (net.Conn, error) {
 	}
 
 	if ne, ok := err.(net.Error); ok && ne.Timeout() {
-		return nil, errors.New("Timeout Error")
+		return nil, error_time_out
 	}
 
 	return nil, err

@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"regexp"
 	"fmt"
-	"errors"
 	"net"
 )
 
@@ -73,7 +72,7 @@ func (cli *Client) dumpItems(addr net.Addr) (map[string]ItemMeta, error) {
 				return nil, err
 			}
 			if bytes.Equal(data, response_error) {
-				return nil, errors.New("ERROR")
+				return nil, error_response_error
 			}
 			if bytes.Equal(data, response_end) {
 				break
@@ -137,7 +136,7 @@ func (cli *Client) stats(addr net.Addr, request string) (map[string]string, erro
 			return nil, err
 		}
 		if bytes.Equal(data, response_error) {
-			return nil, errors.New("ERROR")
+			return nil, error_response_error
 		}
 		if bytes.Equal(data, response_end) {
 			break

@@ -1,5 +1,4 @@
 package memcache
-import "errors"
 
 type HashAlgorithm int
 const (
@@ -12,7 +11,7 @@ func hash(key string, algorithm HashAlgorithm) (int, error) {
 	case NATIVE_HASH:
 		return string_hash(key), nil
 	default:
-		return -1, errors.New("algorithm")
+		return -1, error_not_select_algorithm
 	}
 }
 
