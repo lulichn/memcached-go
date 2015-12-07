@@ -16,8 +16,9 @@ type Nodes struct {
 }
 
 type ClusterNodes struct {
-	*Nodes
-	cnf  net.Addr
+	cnf   net.Addr
+	addrs []net.Addr
+	lock  sync.RWMutex
 }
 
 type Client struct {
