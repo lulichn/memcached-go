@@ -38,11 +38,7 @@ type ECClusterConfig struct {
 func (cli *Client) Get(key string) (Item, error) {
 	getItem := Item{}
 
-	addr, err := cli.pickServer(key)
-	if err != nil {
-		return getItem, err
-	}
-	conn, err := cli.getConn(addr)
+	conn, err := cli.getConnWithKey(key)
 	if err != nil {
 		return getItem, err
 	}
@@ -87,11 +83,7 @@ func (cli *Client) Get(key string) (Item, error) {
 }
 
 func (cli *Client) Set(key string, value []byte, flags uint16, expireTime int) error {
-	addr, err := cli.pickServer(key)
-	if err != nil {
-		return err
-	}
-	conn, err := cli.getConn(addr)
+	conn, err := cli.getConnWithKey(key)
 	if err != nil {
 		return err
 	}
@@ -122,11 +114,7 @@ func (cli *Client) Set(key string, value []byte, flags uint16, expireTime int) e
 }
 
 func (cli *Client) Delete(key string) error {
-	addr, err := cli.pickServer(key)
-	if err != nil {
-		return err
-	}
-	conn, err := cli.getConn(addr)
+	conn, err := cli.getConnWithKey(key)
 	if err != nil {
 		return err
 	}
@@ -155,8 +143,7 @@ func (cli *Client) Delete(key string) error {
 func (cli * Client) ClusterConfig() (ECClusterConfig, error) {
 	config := ECClusterConfig{}
 
-	addrs := cli.serverSelector.Servers()
-	conn, err := cli.getConn(addrs[0])
+	conn, err := cli.getConnConfigNode()
 	if err != nil {
 		return config, err
 	}

@@ -44,7 +44,7 @@ func NewWithConfiguration(servers []string, configuration ClientConfiguration) *
 }
 
 func NewFromSelector(ss ServerSelector, configuration ClientConfiguration) *Client {
-	return &Client{
+	return &Client {
 		serverSelector: ss,
 		configuration: configuration,
 	}
@@ -90,6 +90,34 @@ func (c *Client) getConn(addr net.Addr) (*conn, error) {
 	cn.nc.SetDeadline(time.Now().Add(c.getTimeOut()))
 
 	return cn, nil
+}
+
+func (c *Client) getConnWithKey(key string) (*conn, error) {
+	addr, err := c.pickServer(key)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := c.getConn(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
+func (c *Client) getConnConfigNode() (*conn, error) {
+	nodes := c.serverSelector.Servers()
+	if len(nodes) == 0 {
+		return nil, errors.New("No Server")
+	}
+
+	conn, err := c.getConn(nodes[0])
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
 
 func (c *Client) getTimeOut() time.Duration {

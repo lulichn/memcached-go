@@ -32,7 +32,10 @@ func (nodes *Nodes) SetNodes(servers []string) error {
 		}
 	}
 
+	nodes.lock.Lock()
+	defer nodes.lock.Unlock()
 	nodes.addrs = addrs
+
 	return nil
 }
 
