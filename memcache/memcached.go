@@ -73,7 +73,6 @@ func (cli *Client) Get(key string) (Item, error) {
 		return getItem, error_get_cache_miss
 	}
 	metaSub := r.FindStringSubmatch(string(meta))
-	fmt.Println("GET: " + string(meta))
 
 	flags, err := strconv.Atoi(metaSub[2])
 	if err != nil {
@@ -126,7 +125,6 @@ func (cli *Client) Set(key string, value []byte, flags uint16, expireTime int) e
 		return nil
 	}
 
-	fmt.Println("SET: " + string(result))
 	return error_set_failed
 }
 

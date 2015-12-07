@@ -87,9 +87,6 @@ func (cli *Client) dumpItems(addr net.Addr) (map[string]ItemMeta, error) {
 				}
 				items[key] = ItemMeta{Key: key, Size: size, Expire: expire}
 			}
-
-
-			fmt.Print(string(data))
 		}
 	}
 

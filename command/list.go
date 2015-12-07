@@ -16,7 +16,6 @@ func CmdList(c *cli.Context) {
 
 	if itemsList, err := client.ClusterDumpItems(); err != nil {
 		fmt.Println(err)
-		return
 	} else {
 		for idx := 0; idx < len(itemsList); idx += 1 {
 			items := itemsList[idx]
